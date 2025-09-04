@@ -1,5 +1,5 @@
 # GHIPrediction
-Analysis of the CWEEDS_2020_BC time-series dataset for GHI prediction. Implemented an LSTM architecture to predict the next hours GHI using the last 24 hours data of the sensor and its closest auxillary sensors.
+Analysis of the CWEEDS_2020_BC time-series dataset for GHI prediction. Implemented an LSTM architecture to predict the next hour's GHI using the last 24 hours of data from the sensor and its closest auxiliary sensors.
 
 Can be used with Google Colab.
 
