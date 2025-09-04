@@ -1,7 +1,7 @@
 # GHIPrediction
 Analysis of the CWEEDS_2020_BC time-series dataset for GHI prediction. Implemented an LSTM architecture to predict the next hours GHI using the last 24 hours data of the sensor and its closest auxillary sensors.
 
-Can be used with Google Collab.
+Can be used with Google Colab.
 
 The data used is from Canada's Weather Energy and Engineering Climate Dataset (CWEEDS).
 
