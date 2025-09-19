@@ -101,21 +101,38 @@ def main():
     # Saving the model to the correct folder. Use the correct naming schema outlined in the README
     from pathlib import Path #For loading a specific file
     try: 
-        current_file_path = Path().resolve()  # Current working directory
-        current_directory = current_file_path
-        relative_path = Path("GHIPrediction") / "Models"
-
-        save_path = str(current_directory / relative_path / "model_3_5_1.pth")
-        print(save_path)
+        # Current working directory
+        current_directory = Path().resolve()
+        
+        # Path to Models directory
+        models_dir = current_directory / "Models"
+        
+        # Make sure the directory exists
+        models_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Final save path
+        save_path = str(models_dir / "model_3_5_1.pth")
+        
+        print(f"Model will be saved to: {save_path}")
         torch.save(mainModel.state_dict(), save_path)
+        
     except Exception as e:
-        current_file_path = Path().resolve()  # Current working directory
-        current_directory = current_file_path
-        relative_path = "Models"
-
-        save_path = str(current_directory / relative_path / "model_3_5_1.pth")
-        print(save_path)
+        # Current working directory
+        current_directory = Path().resolve()
+        
+        # Path to GHIPrediction/Models
+        relative_path = Path("GHIPrediction") / "Models"
+        models_dir = current_directory / relative_path
+        
+        # Make sure the directory exists
+        models_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Final save path
+        save_path = str(models_dir / "model_3_5_1.pth")
+        
+        print(f"Model will be saved to: {save_path}")
         torch.save(mainModel.state_dict(), save_path)
+        
     except Exception as e:
         print("Error occurred while saving the model:", e)
 
