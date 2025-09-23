@@ -21,7 +21,7 @@ class GHIDataset(Dataset):
     
 
 class Main_LSTM(nn.Module):
-    def __init__(self, dropout=0.0):
+    def __init__(self, dropout=0.0, num_aux_stations=3):
         """
         input_dim: Number of features per time step (here, 5)
         hidden_dim: Number of hidden units in the LSTM
@@ -29,12 +29,14 @@ class Main_LSTM(nn.Module):
         dropout: Dropout probability (applied between LSTM layers if num_layers > 1)
         """
         super(Main_LSTM, self).__init__()
-        self.Stationlstm = nn.LSTM(34, 128, 3,
+        num_input = 10 + num_aux_stations*8
+        self.Stationlstm = nn.LSTM(num_input, 128, 3,
                             batch_first=True, dropout=dropout)
         self.Auxlstm = nn.LSTM(8, 8, 2,
                             batch_first=True, dropout=dropout)#may need to change 16 back to 8
         # A fully-connected layer to map the LSTM output to a single GHI prediction
         self.station_fc = nn.Linear(128, 1)
+        self.num_aux_stations = num_aux_stations
 
     def forward(self, x):
         # x shape: (batch_size, sequence_length, input_dim)
@@ -45,7 +47,7 @@ class Main_LSTM(nn.Module):
         aux_station_data = x[:, :, 10:]  # Remaining features are for auxiliary stations
         aux_lstm_outs = []
         #other idea: range start at 10 go to 34 add 8 each time as 3 auxillaries
-        for i in range(0, 24, 8): #range start at 0 go to 24 add 8 each time as 3 auxillary stations
+        for i in range(0, self.num_aux_stations*8, 8): #range start at 0 go to 8*num_aux_stations add 8 each time as num_aux_stations auxillary stations
           lstm_out, _ = self.Auxlstm(aux_station_data[:, :, i:i+8])
           aux_lstm_outs.append(lstm_out)
         concat = torch.cat(([main_station_data]+aux_lstm_outs), 2)

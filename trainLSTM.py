@@ -43,18 +43,23 @@ def main():
     csv_files = glob.glob(os.path.join(path, "*.csv"))
 
     file_path = 'Datasets/stationsName_lat_long_data.csv'
+    num_aux_stations = 4
     stationsName_lat_long_datadf = pd.read_csv(file_path, delimiter=',', on_bad_lines='skip')
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -131.75, 54.5, 3, csv_files)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -131.75, 54.5, num_aux_stations, csv_files)
     combined_chunked_data_tensor1 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI2, stdGHI2 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -123, 50,3, csv_files)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI2, stdGHI2 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -123, 50,num_aux_stations, csv_files)
     combined_chunked_data_tensor2 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI3, stdGHI3 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -123.5, 48,3, csv_files)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI3, stdGHI3 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -123.5, 48,num_aux_stations, csv_files)
     combined_chunked_data_tensor3 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI4, stdGHI4 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -122.5, 60,3, csv_files)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI4, stdGHI4 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -122.5, 60,num_aux_stations, csv_files)
     combined_chunked_data_tensor4 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI5, stdGHI5 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -127.75, 51,3, csv_files)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI5, stdGHI5 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -127.75, 51,num_aux_stations, csv_files)
     combined_chunked_data_tensor5 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
     combined_chunked_data_tensor = torch.cat([combined_chunked_data_tensor1, combined_chunked_data_tensor2, combined_chunked_data_tensor3, combined_chunked_data_tensor4, combined_chunked_data_tensor5], dim=0)
+
+    mean_MeansGHI = np.mean([meanGHI1, meanGHI2, meanGHI3, meanGHI4, meanGHI5])
+    std_MeansGHI = np.mean([stdGHI1, stdGHI2, stdGHI3, stdGHI4, stdGHI5])
+   
     #Deleting all tensors and data no longer needed to save space on RAM
     del wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order
     del combined_chunked_data_tensor1, combined_chunked_data_tensor2, combined_chunked_data_tensor3, combined_chunked_data_tensor4, combined_chunked_data_tensor5
@@ -64,7 +69,7 @@ def main():
     #dataset = GHIDataset(combined_chunked_data_tensor, device=device)
     dataset = GHIDataset(combined_chunked_data_tensor, device=device)
     train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
-    mainModel = Main_LSTM().to(device)
+    mainModel = Main_LSTM(num_aux_stations=num_aux_stations).to(device)
     mainModel = torch.compile(mainModel)
     #mainModel = Main_LSTM()
     criterion = nn.MSELoss()  # Mean Squared Error is common for regression tasks
@@ -139,8 +144,7 @@ def main():
     try:
         import matplotlib.pyplot as plt
         outputlist, targetData, colourList = test_model(mainModel, train_loader, criterion, device)
-        mean_MeansGHI = np.mean([meanGHI1, meanGHI2, meanGHI3, meanGHI4, meanGHI5])
-        std_MeansGHI = np.mean([stdGHI1, stdGHI2, stdGHI3, stdGHI4, stdGHI5])
+        
         targetGHI = targetData*std_MeansGHI + mean_MeansGHI
         outputGHI = outputlist*std_MeansGHI + mean_MeansGHI #normalized
         colourListGHI = colourList[:,0]*std_MeansGHI + mean_MeansGHI
