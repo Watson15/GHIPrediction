@@ -24,8 +24,9 @@ def plot_stations_matplotlib(center_latlon, neighbors_df, all_stations_df, figsi
         color='blue',
         label='Picked Neighbors'
     )
-    # for _, row in neighbors_df.iterrows():
-    #     plt.text(row['Longitude'] + 0.002, row['Latitude'], row['station'], fontsize=9)
+    for _, row in neighbors_df.iterrows():
+        plt.text(row['Longitude'] -1.5, row['Latitude']+0.25, row['station'], fontsize=9)
+    print("Plotted neighbors:")
 
     # Plot the target station
     plt.scatter(center_lon, center_lat, color='red', marker='*', s=150, label='Target Station')
