@@ -39,7 +39,7 @@ def test_model(model, test_loader, criterion, device):
     return outputlist, targetData, colourList
 
 def main():
-    path = 'Datasets/CWEEDS_2020_BC'
+    path = 'Datasets/CWEEDS_2020_BC_raw'
     csv_files = glob.glob(os.path.join(path, "*.csv"))
 
     file_path = 'Datasets/stationsName_lat_long_data.csv'
