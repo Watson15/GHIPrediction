@@ -1,9 +1,11 @@
+import re
+
 import numpy as np
 import pandas as pd
 import torch
-import re
-#from plotting import plot_stations_matplotlib
 
+#from plotting import plot_stations_matplotlib
+from constants import COLUMN_NAMES
 
 
 def getStationTimePeriodFromYears(csv_file):
@@ -137,8 +139,8 @@ def spatially_diverse_knn(df,station_name, k=3, candidate_pool=78):
   df_filtered['distance'] = np.linalg.norm(df_filtered[['x', 'y']].values - center_xy, axis=1)
   df_sorted = df_filtered.sort_values('distance').head(candidate_pool)
   df_sorted['distance'] = df_sorted.apply(lambda row: makeDistanceTuple(row['distance'], row['x'], row['y']), axis=1)
-  print("After sorting by distance")
-  print(df_sorted.head())
+  #print("After sorting by distance")
+  #print(df_sorted.head())
   selected_rows = []
   selected_xy = []
 
@@ -192,7 +194,7 @@ def find_stations_csv(stations, csvs):
   nearest_stations_csvs = []
   for station in stations:
     for csv in csvs:
-      if station.lower() in csv.lower():
+      if station.lower().replace("-","_") in csv.lower():
         nearest_stations_csvs.append(csv)
         print(f"Station {station} found in {csv}")
         station_order.append(station)
@@ -212,88 +214,68 @@ def cyclicalEncoding(data, cycleLength):
   newDatacos = np.cos(2 * np.pi * (data - 1) / cycleLength)  # Cosine encoding for hours (adjust for 0-23)
   return newDatasin, newDatacos
 
-usecols = [
-    'Year Month Day Hour (YYYYMMDDHH)',
-    'Global horizontal irradiance / kJ/m2',
-    'Direct normal irradiance / kJ/m2',
-    'Diffuse horizontal irradiance / kJ/m2',
-    'Wind direction / 0-359 degrees',
-    'Wind speed / 0.1 m/s'
-]
-
-dtype = {
-    'Year Month Day Hour (YYYYMMDDHH)': str,  # Read as string initially to handle errors
-    'Global horizontal irradiance / kJ/m2': str,
-    'Direct normal irradiance / kJ/m2': str,
-    'Diffuse horizontal irradiance / kJ/m2': str,
-    'Wind direction / 0-359 degrees': str,
-    'Wind speed / 0.1 m/s': str
-}
-
-def get_nearest_stations_data(nearest_stations_csvs, min_start_year, max_end_year, wantedStationCSV=False, RelativeAnglesDegrees=[(0,0)]):
+def get_nearest_stations_data(nearest_stations_csvs, min_start_year, max_end_year, wantedStationCSV=False, RelativeAnglesDegrees=[(0,0)], usecols=[], dtype={}):
   dfs = []
   i = 0
   meanGHI = 0
   stdGHI = 0
   for f in nearest_stations_csvs:
     # Read the CSV file with specified columns and data types
-    df = pd.read_csv(f, delimiter=',', skiprows=2, index_col=False, usecols=usecols, dtype=dtype, on_bad_lines='skip')
+    df = pd.read_csv(f, delimiter=',', index_col=False, usecols=usecols, dtype=dtype, on_bad_lines='skip')
     # Convert columns to numeric, coercing errors to NaN
+    
     for col in usecols:
-      if(col == 'Year Month Day Hour (YYYYMMDDHH)'):
-        #keep as string
-        df['Year Month Day Hour (YYYYMMDDHH)'] = df[col].astype(int)
-        df = df[df['Year Month Day Hour (YYYYMMDDHH)']>min_start_year]
-        df = df[df['Year Month Day Hour (YYYYMMDDHH)']<=max_end_year]#Data is between min_start_year and max_end_year to accomidate files that dont have the same amount of data
+      match col:
+        case x if x == COLUMN_NAMES["YEAR_MONTH_DAY_HOUR"]:
+          df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
+          df = df[df[col].between(min_start_year, max_end_year)]
+          df = df.drop(columns=[col], axis=1)
 
-        if(wantedStationCSV): #get month and hour for just wanted station
-          df['Year Month Day Hour (YYYYMMDDHH)'] = df['Year Month Day Hour (YYYYMMDDHH)'].astype(str)
-          # Get month (1-12)
-          df['Month'] = df['Year Month Day Hour (YYYYMMDDHH)'].str[4:6].astype(int)
-          # Get hour (1-24)
-          df['Hour'] = df['Year Month Day Hour (YYYYMMDDHH)'].str[8:10].astype(int)
-          # Normalize hour so cyclic (0-23)
-          df['Hour_sin'], df['Hour_cos'] = cyclicalEncoding(df['Hour'], 24)# Sine and Cosine encoding for hours (adjust for 0-23)
-          # df['Hour_sin'] = np.sin(2 * np.pi * (df['Hour'] - 1) / 24)
-          # df['Hour_cos'] = np.cos(2 * np.pi * (df['Hour'] - 1) / 24)  # Cosine encoding for hours (adjust for 0-23)
-          # Normalize month so cyclic (0-11))
-          df['Month_sin'], df['Month_cos'] = cyclicalEncoding(df['Month'], 12)# Sine and Cosine encoding for months
-          # df['Month_sin'] = np.sin(2 * np.pi *  (df['Month']-1)/ 12)  # Sine encoding for months
-          # df['Month_cos'] = np.cos(2 * np.pi *  (df['Month']-1) / 12)  # Cosine encoding for months
-          df = df.drop(columns=['Month'], axis=1)
-          df = df.drop(columns=['Hour'], axis=1)
+        case x if x == COLUMN_NAMES["OPAQUE_SKY_COVER"]:
+          df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
 
-        df = df.drop(columns=[col], axis=1)
-        continue
+        case x if x in [COLUMN_NAMES["MONTH"], COLUMN_NAMES["HOUR"]]:
+          df = df.drop(columns=[col], axis=1)
 
-      if(col=='Wind direction / 0-359 degrees'):
-        df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
-        if(not wantedStationCSV):
-          df[col] = df[col].apply(lambda x: adjustWindDirection(x, RelativeAnglesDegrees[i]))
-          #When wind is pointed towards the wanted station it has a new angle of 0 degrees and when pointed directly away from it it has a 180 degrees value now
-        radians = np.deg2rad(df[col])
-        df['wind_dir_sin'] = np.sin(radians)
-        df['wind_dir_cos'] = np.cos(radians)
-        df = df.drop(columns=[col], axis=1)
-        continue
+        case x if x in [COLUMN_NAMES["HOUR_SIN"], COLUMN_NAMES["HOUR_COS"],
+                        COLUMN_NAMES["MONTH_SIN"], COLUMN_NAMES["MONTH_COS"]]:
+          if not wantedStationCSV:
+            df = df.drop(columns=[col], axis=1)
+          else:
+            df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
 
-      if(col == 'Wind speed / 0.1 m/s'):
-        df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
-        mean = df[col].mean()
-        std = df[col].std()
-        df[col] = (df[col] - mean) / std
-        continue
+        case x if x in [COLUMN_NAMES["WIND_DIRECTION_SIN"], COLUMN_NAMES["WIND_DIRECTION_COS"]]:
+          if wantedStationCSV:
+            df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
 
-      if (col == 'Global horizontal irradiance / kJ/m2' or col == 'Direct normal irradiance / kJ/m2' or col == 'Diffuse horizontal irradiance / kJ/m2'):
-        df[col] = pd.to_numeric(df[col], errors='coerce').replace(9999, np.nan)
-        mean = df[col].mean()
-        std = df[col].std()
-        df[col] = (df[col] - mean) / std #can denormalize output
-        if (col == 'Global horizontal irradiance / kJ/m2'):
-          meanGHI = mean
-          stdGHI = std #for denormalizing
-        continue
-      df[col] = pd.to_numeric(df[col], errors='coerce')
+        case x if x == COLUMN_NAMES["WIND_DIRECTION"]:
+          if not wantedStationCSV:
+            df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
+            df[col] = df[col].apply(lambda x: adjustWindDirection(x, RelativeAnglesDegrees[i]))
+            radians = np.deg2rad(df[col])
+            df[COLUMN_NAMES["WIND_DIRECTION_SIN"]] = np.sin(radians)
+            df[COLUMN_NAMES["WIND_DIRECTION_COS"]] = np.cos(radians)
+          df = df.drop(columns=[col], axis=1)
+
+        case x if x == COLUMN_NAMES["WIND_SPEED"]:
+          if not wantedStationCSV:
+            df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
+            mean = df[col].mean()
+            std = df[col].std()
+            df[col] = (df[col] - mean) / std
+
+        case x if x in [COLUMN_NAMES["GHI"], COLUMN_NAMES["DNI"], COLUMN_NAMES["DHI"]]:
+          df[col] = pd.to_numeric(df[col], errors='coerce').replace(9999, np.nan)
+          mean = df[col].mean()
+          std = df[col].std()
+          if col == COLUMN_NAMES["GHI"]:
+            meanGHI = mean
+            stdGHI = std
+
+        case _:
+          df[col] = pd.to_numeric(df[col], errors='coerce')
+      
+    
     df.fillna(0, inplace=True)
     dfs.append(df)
     i+=1
@@ -331,84 +313,87 @@ def getMaxStartMinEndYearComplete(max_start_year, min_end_year):
   minEndYear = int(minEndYear)
   return maxStartYear, minEndYear
 
-def angle_from_wanted_station(row, wanted_station_long, wanted_station_lat):
-  print(row["station"])
-  lat, lon = row['Latitude'], row['Longitude']
-  delta_lon = lon - wanted_station_long
-  delta_lat = lat - wanted_station_lat
-  angle = np.arctan2(delta_lat, delta_lon)  # Angle in radians
-  angle_degrees = np.degrees(angle)
-  if angle_degrees < 0:
-    angle_degrees += 360  # Normalize to [0, 360]
-  return angle_degrees
+# def angle_from_wanted_station(row, wanted_station_long, wanted_station_lat):
+#   print(row["station"])
+#   lat, lon = row['Latitude'], row['Longitude']
+#   delta_lon = lon - wanted_station_long
+#   delta_lat = lat - wanted_station_lat
+#   angle = np.arctan2(delta_lat, delta_lon)  # Angle in radians
+#   angle_degrees = np.degrees(angle)
+#   if angle_degrees < 0:
+#     angle_degrees += 360  # Normalize to [0, 360]
+#   return angle_degrees
 
-def sortAuxillaryStations(nearest_stations_df, wanted_station_lat, wanted_station_long):
-  """
-  From the auxillary stations found, sort them to have the first one be the eastern most station, the second be the western most station the third be the northern most station and the fourth be the southern most station
-  """
+# def sortAuxillaryStations(nearest_stations_df, wanted_station_lat, wanted_station_long):
+#   """
+#   From the auxillary stations found, sort them to have the first one be the eastern most station, the second be the western most station the third be the northern most station and the fourth be the southern most station
+#   """
 
-  nearest_stations_df['angle'] = nearest_stations_df.apply(angle_from_wanted_station, axis=1, wanted_station_long=wanted_station_long, wanted_station_lat=wanted_station_lat)
-  sorted_stations = nearest_stations_df.sort_values(by='angle').reset_index(drop=True)
-  print("Sorted Stations by angle (0 degrees is east, 90 degrees is north, 180 degrees is west, 270 degrees is south):")
-  print(sorted_stations.head())
-  return sorted_stations
+#   nearest_stations_df['angle'] = nearest_stations_df.apply(angle_from_wanted_station, axis=1, wanted_station_long=wanted_station_long, wanted_station_lat=wanted_station_lat)
+#   sorted_stations = nearest_stations_df.sort_values(by='angle').reset_index(drop=True)
+#   print("Sorted Stations by angle (0 degrees is east, 90 degrees is north, 180 degrees is west, 270 degrees is south):")
+#   print(sorted_stations.head())
+#   return sorted_stations
   
 
-def getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf, nearest_stations, k, min_start_year, max_end_year, RelativeAnglesDegrees, csv_files):
+def getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf, nearest_stations, k, min_start_year, max_end_year, RelativeAnglesDegrees, csv_files, usecols=[], dtype={}):
   #doing all thats needed to get Auxillary stations data ready and in chunked tensors and in order chunked
   modified_nearest_stations = modify_nearest_stations(nearest_stations)
   nearest_stations_csvs, station_order = find_stations_csv(modified_nearest_stations, csv_files)
-  nearest_stations_data_dfs, _, _ = get_nearest_stations_data(nearest_stations_csvs, min_start_year, max_end_year, False, RelativeAnglesDegrees)
-
+  nearest_stations_data_dfs, _, _ = get_nearest_stations_data(nearest_stations_csvs=nearest_stations_csvs, min_start_year=min_start_year, max_end_year=max_end_year, wantedStationCSV=False, RelativeAnglesDegrees=RelativeAnglesDegrees, usecols=usecols, dtype=dtype)
   for i in range(k):
     nearest_stations_data_dfs[i]["distanceX"] = [nearest_stations['distance'].values[i][1][0]]*len(nearest_stations_data_dfs[i])
     nearest_stations_data_dfs[i]["distanceY"] = [nearest_stations['distance'].values[i][1][1]]*len(nearest_stations_data_dfs[i])
-    #print(nearest_stations_data_dfs[i].head())
-    #print(nearest_stations_data_dfs[i].columns)
+
   aux_chunked_tensors, aux_chunked_station_order = get_chunked_tensors(nearest_stations, nearest_stations_data_dfs, 25)
-  return aux_chunked_tensors, aux_chunked_station_order
+  return aux_chunked_tensors, aux_chunked_station_order, nearest_stations_data_dfs
 
 
-def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, long, k, csv_files):
-  #doing everything needed to get wanted stations data ready and in chunked tensors as well as get wanted station and its name
-  wanted_station = find_nearest_station_given_long_lat(stationsName_lat_long_datadf, lat, long)
-  max_start_year = wanted_station["StartTime"].values[0]
-  min_end_year = wanted_station["EndTime"].values[0]
+def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, long, k, csv_files, usecols=[], dtype={}):
+  try:
+    #doing everything needed to get wanted stations data ready and in chunked tensors as well as get wanted station and its name
+    wanted_station = find_nearest_station_given_long_lat(stationsName_lat_long_datadf, lat, long)
+    max_start_year = wanted_station["StartTime"].values[0]
+    min_end_year = wanted_station["EndTime"].values[0]
 
-  wanted_station.at[wanted_station.index[0], "distance"] = (0.0, (0.0, 0.0))
-  wanted_station_modified = modify_nearest_stations({"station": wanted_station["station"]})
-  wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
+    wanted_station.at[wanted_station.index[0], "distance"] = (0.0, (0.0, 0.0))
+    wanted_station_modified = modify_nearest_stations({"station": wanted_station["station"]})
+    wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
+    nearest_stations, target_point = spatially_diverse_knn(stationsName_lat_long_datadf, wanted_station["station"].values[0], k)
+    #print("nearest: ", nearest_stations.head())
+    #print("wanted: ", wanted_station)
+    #nearest_stations = sortAuxillaryStations(nearest_stations, wanted_station["Latitude"].values[0], wanted_station["Longitude"].values[0])
+    #plot_stations_matplotlib(target_point, nearest_stations, stationsName_lat_long_datadf)
+    #print(nearest_stations.head())
+    
+    max_start_year, min_end_year = max(max_start_year, *nearest_stations["StartTime"].values), min(min_end_year, *nearest_stations["EndTime"].values)
+    max_start_year, min_end_year = getMaxStartMinEndYearComplete(max_start_year, min_end_year)
+    print(max_start_year, min_end_year)
 
-  nearest_stations, target_point = spatially_diverse_knn(stationsName_lat_long_datadf, wanted_station["station"].values[0], k)
-  #print("nearest: ", nearest_stations.head())
-  #print("wanted: ", wanted_station)
-  #nearest_stations = sortAuxillaryStations(nearest_stations, wanted_station["Latitude"].values[0], wanted_station["Longitude"].values[0])
-  from plotting import plot_stations_matplotlib
-  plot_stations_matplotlib(target_point, nearest_stations, stationsName_lat_long_datadf)
-  #print(nearest_stations.head())
-  
-  max_start_year, min_end_year = max(max_start_year, *nearest_stations["StartTime"].values), min(min_end_year, *nearest_stations["EndTime"].values)
-  max_start_year, min_end_year = getMaxStartMinEndYearComplete(max_start_year, min_end_year)
+    RelativeAnglesDegrees = []
+    for distanceVector in nearest_stations["distance"].values:
+      Relative_Angle_Radians = np.arctan2(distanceVector[1][1], distanceVector[1][0])#Relative Distance Vector y and Distance Vector x
+      Relative_Angle_Degrees = np.degrees(Relative_Angle_Radians)
+      if Relative_Angle_Degrees < 0:
+        Relative_Angle_Degrees += 360
+      RelativeAnglesDegrees.append(Relative_Angle_Degrees)
+    #print("done vector angles")
+    
+    aux_chunked_tensors, aux_chunked_station_order, aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
+    print("Auxillary Stations Order:")
+    print(aux_chunked_station_order)
+    
+    wanted_station_data_dfs, meanGHI, stdGHI = get_nearest_stations_data(wanted_station_csv, max_start_year, min_end_year, wantedStationCSV=True, usecols=usecols, dtype=dtype)
 
-  RelativeAnglesDegrees = []
-  for distanceVector in nearest_stations["distance"].values:
-    Relative_Angle_Radians = np.arctan2(distanceVector[1][1], distanceVector[1][0])#Relative Distance Vector y and Distance Vector x
-    Relative_Angle_Degrees = np.degrees(Relative_Angle_Radians)
-    if Relative_Angle_Degrees < 0:
-      Relative_Angle_Degrees += 360
-    RelativeAnglesDegrees.append(Relative_Angle_Degrees)
+    wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
 
-  aux_chunked_tensors, aux_chunked_station_order = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf, nearest_stations, k, max_start_year, min_end_year, RelativeAnglesDegrees, csv_files)
-  print("Auxillary Stations Order:")
-  print(aux_chunked_station_order)
-  wanted_station_data_dfs, meanGHI, stdGHI = get_nearest_stations_data(wanted_station_csv, max_start_year, min_end_year,wantedStationCSV=True)
-  #print(wanted_station_data_dfs[0].head())
-  wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
-
-  return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI
+    return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI, aux_stations_dfs, wanted_station_data_dfs
+  except Exception as e:
+    print("Error in getAllReadyForStationByLatAndLongAndK: ", e)
+    return None, None, None, None, None, None, None, None
 
 
-def getAllReadyForStationByLatAndLongAndKSplitTestAndTrain(stationsName_lat_long_datadf, lat, long, k, csv_files):
+def getAllReadyForStationByLatAndLongAndKSplitTestAndTrain(stationsName_lat_long_datadf, lat, long, k, csv_files, usecols=[], dtype={}):
   #doing everything needed to get wanted stations data ready and in chunked tensors as well as get wanted station and its name
   wanted_station = find_nearest_station_given_long_lat(stationsName_lat_long_datadf, lat, long)
   max_start_year = wanted_station["StartTime"].values[0]
@@ -436,11 +421,11 @@ def getAllReadyForStationByLatAndLongAndKSplitTestAndTrain(stationsName_lat_long
       Relative_Angle_Degrees += 360
     RelativeAnglesDegrees.append(Relative_Angle_Degrees)
 
-  trainSet_aux_chunked_tensors, trainSet_aux_chunked_station_order = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf, nearest_stations, k, train_max_start_year, train_min_end_year, RelativeAnglesDegrees, csv_files)
-  testSet_aux_chunked_tensors, testSet_aux_chunked_station_order = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf, nearest_stations, k, test_max_start_year, test_min_end_year, RelativeAnglesDegrees, csv_files)
+  trainSet_aux_chunked_tensors, trainSet_aux_chunked_station_order = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf, nearest_stations, k, train_max_start_year, train_min_end_year, RelativeAnglesDegrees, csv_files, usecols=usecols, dtype=dtype)
+  testSet_aux_chunked_tensors, testSet_aux_chunked_station_order = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf, nearest_stations, k, test_max_start_year, test_min_end_year, RelativeAnglesDegrees, csv_files, usecols=usecols, dtype=dtype)
 
-  trainSet_wanted_station_data_dfs = get_nearest_stations_data(wanted_station_csv, train_max_start_year, train_min_end_year,wantedStationCSV=True)
-  testSet_wanted_station_data_dfs = get_nearest_stations_data(wanted_station_csv, test_max_start_year, test_min_end_year,wantedStationCSV=True)
+  trainSet_wanted_station_data_dfs = get_nearest_stations_data(wanted_station_csv, train_max_start_year, train_min_end_year,wantedStationCSV=True, usecols=usecols, dtype=dtype)
+  testSet_wanted_station_data_dfs = get_nearest_stations_data(wanted_station_csv, test_max_start_year, test_min_end_year,wantedStationCSV=True, usecols=usecols, dtype=dtype)
   #print(wanted_station_data_dfs[0].head())
 
   trainSet_wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, trainSet_wanted_station_data_dfs, 25)
