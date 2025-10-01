@@ -194,7 +194,7 @@ def find_stations_csv(stations, csvs):
   nearest_stations_csvs = []
   for station in stations:
     for csv in csvs:
-      if station.lower().replace("-","_") in csv.lower():
+      if station.lower().replace("-","_") in csv.lower().replace("-","_"):
         nearest_stations_csvs.append(csv)
         print(f"Station {station} found in {csv}")
         station_order.append(station)
