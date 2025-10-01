@@ -258,11 +258,10 @@ def get_nearest_stations_data(nearest_stations_csvs, min_start_year, max_end_yea
           df = df.drop(columns=[col], axis=1)
 
         case x if x == COLUMN_NAMES["WIND_SPEED"]:
-          if not wantedStationCSV:
-            df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
-            mean = df[col].mean()
-            std = df[col].std()
-            df[col] = (df[col] - mean) / std
+          df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
+          mean = df[col].mean()
+          std = df[col].std()
+          df[col] = (df[col] - mean) / std
 
         case x if x in [COLUMN_NAMES["GHI"], COLUMN_NAMES["DNI"], COLUMN_NAMES["DHI"]]:
           df[col] = pd.to_numeric(df[col], errors='coerce').replace(9999, np.nan)
@@ -273,9 +272,9 @@ def get_nearest_stations_data(nearest_stations_csvs, min_start_year, max_end_yea
             stdGHI = std
 
         case _:
-          df[col] = pd.to_numeric(df[col], errors='coerce')
+          df[col] = df.drop(columns=[col], axis=1)
       
-    
+    #print(df.dtypes)
     df.fillna(0, inplace=True)
     dfs.append(df)
     i+=1
@@ -298,6 +297,7 @@ def get_chunked_tensors(nearest_stations, dfs, interval):
     distanceVector = station.iloc[3][1]
     chunked_df = chunk(dfs[rows], interval=interval)
     rows+=1
+    #print("chunked df shape:", chunked_df.shape)
     chunkedTensor = torch.tensor(chunked_df).to(torch.float32)
     chunked_tensors.append(chunkedTensor)
     station_order.append(station)
@@ -346,6 +346,7 @@ def getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datad
     nearest_stations_data_dfs[i]["distanceY"] = [nearest_stations['distance'].values[i][1][1]]*len(nearest_stations_data_dfs[i])
 
   aux_chunked_tensors, aux_chunked_station_order = get_chunked_tensors(nearest_stations, nearest_stations_data_dfs, 25)
+  #print("Auxillary StationsChunked:", aux_chunked_station_order)
   return aux_chunked_tensors, aux_chunked_station_order, nearest_stations_data_dfs
 
 
@@ -380,13 +381,14 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
     #print("done vector angles")
     
     aux_chunked_tensors, aux_chunked_station_order, aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
-    print("Auxillary Stations Order:")
-    print(aux_chunked_station_order)
+    # print("Auxillary Stations Order:")
+    # print(aux_chunked_station_order)
     
     wanted_station_data_dfs, meanGHI, stdGHI = get_nearest_stations_data(wanted_station_csv, max_start_year, min_end_year, wantedStationCSV=True, usecols=usecols, dtype=dtype)
-
+    # print("wanted data df:")
+    # print(wanted_station_data_dfs[0].head())
     wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
-
+    print("chunked")
     return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI, aux_stations_dfs, wanted_station_data_dfs
   except Exception as e:
     print("Error in getAllReadyForStationByLatAndLongAndK: ", e)
