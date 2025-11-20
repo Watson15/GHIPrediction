@@ -1,3 +1,5 @@
+import glob  # For loading multiple files
+import os
 import re
 
 import numpy as np
@@ -5,8 +7,32 @@ import pandas as pd
 import torch
 
 #from plotting import plot_stations_matplotlib
-from constants import COLUMN_NAMES
+from constants import COLUMN_NAMES, DTYPE_NON_CLOUD, USECOLS_NON_CLOUD
 
+
+def getEachStationLatLongFromCSV(csv_file):
+  df = pd.read_csv(csv_file, delimiter=',', index_col=False, usecols=["Latitude", "Longitude", "station"], dtype={"Latitude": float, "Longitude":float, "station": str}, on_bad_lines='skip')
+  path = 'Datasets/CWEEDS_2020_BC_raw'
+  csv_files = glob.glob(os.path.join(path, "*.csv"))
+  file_path = 'Datasets/stationsName_lat_long_data.csv'
+  stationsName_lat_long_datadf = pd.read_csv(file_path, delimiter=',', on_bad_lines='skip')
+
+  num_aux_stations = 4
+  combined_chunked_data_tensor = torch.empty((0, 25, 42)) # 25, 42 is for non cloud data which has 42 features and chunk size of 25
+  meanGIHIS = []
+  stdGIHIS = []
+  stationNames=[]
+  for row in df.itertuples():
+    latitude = row.Latitude
+    longitude = row.Longitude
+    station_name = row.station
+    
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    combined_chunked_data_tensor1 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
+    meanGIHIS.append(meanGHI1)
+    stdGIHIS.append(stdGHI1)
+    stationNames.append(station_name)
+    combined_chunked_data_tensor = torch.cat((combined_chunked_data_tensor, combined_chunked_data_tensor1), dim=0)
 
 def getStationTimePeriodFromYears(csv_file):
   match = re.search(r'(\d{4})-(\d{4})', csv_file)
@@ -215,67 +241,117 @@ def cyclicalEncoding(data, cycleLength):
   return newDatasin, newDatacos
 
 
-def process_data(df, usecols, min_start_year, max_end_year, i, wantedStationCSV=False, RelativeAnglesDegrees=[(0,0)]):
-  for col in usecols:
-      match col:
-        case x if x == COLUMN_NAMES["YEAR_MONTH_DAY_HOUR"]:
-          # Convert columns to numeric, coercing errors to NaN
-          df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
-          df = df[df[col].between(min_start_year, max_end_year)]
-          df = df.drop(columns=[col], axis=1)
+def process_data(
+    df,
+    usecols,
+    min_start_year,
+    max_end_year,
+    i,
+    wantedStationCSV=False,
+    RelativeAnglesDegrees=[(0, 0)],
+):
+    for col in usecols:
+        match col:
+            case x if x == COLUMN_NAMES["YEAR_MONTH_DAY_HOUR"]:
+                # Convert columns to numeric, coercing errors to NaN
+                df[col] = pd.to_numeric(df[col], errors="coerce").replace(99, np.nan)
+                df = df[df[col].between(min_start_year, max_end_year)]
+                df = df.drop(columns=[col], axis=1)
 
-        case x if x == COLUMN_NAMES["OPAQUE_SKY_COVER"]:
-          df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
+            case x if x == COLUMN_NAMES["OPAQUE_SKY_COVER"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce").replace(99, np.nan)
 
-        case x if x in [COLUMN_NAMES["MONTH"], COLUMN_NAMES["HOUR"]]:
-          df = df.drop(columns=[col], axis=1)
+            case x if x in [COLUMN_NAMES["MONTH"], COLUMN_NAMES["HOUR"]]:
+                df = df.drop(columns=[col], axis=1)
 
-        case x if x in [COLUMN_NAMES["HOUR_SIN"], COLUMN_NAMES["HOUR_COS"],
-                        COLUMN_NAMES["MONTH_SIN"], COLUMN_NAMES["MONTH_COS"]]:
-          if not wantedStationCSV:
-            df = df.drop(columns=[col], axis=1)
-          else:
-            df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
+            case x if x in [
+                COLUMN_NAMES["HOUR_SIN"],
+                COLUMN_NAMES["HOUR_COS"],
+                COLUMN_NAMES["MONTH_SIN"],
+                COLUMN_NAMES["MONTH_COS"],
+            ]:
+                if not wantedStationCSV:
+                    df = df.drop(columns=[col], axis=1)
+                else:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").replace(
+                        99, np.nan
+                    )
 
-        case x if x in [COLUMN_NAMES["WIND_DIRECTION_SIN"], COLUMN_NAMES["WIND_DIRECTION_COS"]]:
-          if wantedStationCSV:
-            df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
+            case x if x in [
+                COLUMN_NAMES["WIND_DIRECTION_SIN"],
+                COLUMN_NAMES["WIND_DIRECTION_COS"],
+            ]:
+                if wantedStationCSV:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").replace(
+                        99, np.nan
+                    )
 
-        case x if x == COLUMN_NAMES["WIND_DIRECTION"]:
-          if not wantedStationCSV:
-            df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
-            df[col] = df[col].apply(lambda x: adjustWindDirection(x, RelativeAnglesDegrees[i]))
-            radians = np.deg2rad(df[col])
-            df[COLUMN_NAMES["WIND_DIRECTION_SIN"]] = np.sin(radians)
-            df[COLUMN_NAMES["WIND_DIRECTION_COS"]] = np.cos(radians)
-          df = df.drop(columns=[col], axis=1)
+            case x if x == COLUMN_NAMES["WIND_DIRECTION"]:
+                if not wantedStationCSV:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").replace(
+                        99, np.nan
+                    )
+                    df[col] = df[col].apply(
+                        lambda x: adjustWindDirection(x, RelativeAnglesDegrees[i])
+                    )
+                    radians = np.deg2rad(df[col])
+                    df[COLUMN_NAMES["WIND_DIRECTION_SIN"]] = np.sin(radians)
+                    df[COLUMN_NAMES["WIND_DIRECTION_COS"]] = np.cos(radians)
+                df = df.drop(columns=[col], axis=1)
 
-        case x if x == COLUMN_NAMES["WIND_SPEED"]:
-          df[col] = pd.to_numeric(df[col], errors='coerce').replace(99, np.nan)
+            case x if x == COLUMN_NAMES["WIND_SPEED"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce").replace(99, np.nan)
 
-        case x if x in [COLUMN_NAMES["GHI"], COLUMN_NAMES["DNI"], COLUMN_NAMES["DHI"]]:
-          df[col] = pd.to_numeric(df[col], errors='coerce').replace(9999, np.nan)
+            case x if x in [
+                COLUMN_NAMES["GHI"],
+                COLUMN_NAMES["DNI"],
+                COLUMN_NAMES["DHI"],
+            ]:
+                df[col] = pd.to_numeric(df[col], errors="coerce").replace(9999, np.nan)
 
-        case _:
-          df[col] = df.drop(columns=[col], axis=1)
-  return df 
-    
+            case _:
+                df[col] = df.drop(columns=[col], axis=1)
+    return df
 
-def get_nearest_stations_data(nearest_stations_csvs, min_start_year, max_end_year, wantedStationCSV=False, RelativeAnglesDegrees=[(0,0)], usecols=[], dtype={}):
-  dfs = []
-  i = 0
-  for f in nearest_stations_csvs:
-    # Read the CSV file with specified columns and data types
-    df = pd.read_csv(f, delimiter=',', index_col=False, usecols=usecols, dtype=dtype, on_bad_lines='skip')
-    
-    df = process_data(df, usecols, min_start_year, max_end_year, i, wantedStationCSV=wantedStationCSV, RelativeAnglesDegrees=RelativeAnglesDegrees)
-    
-    print(df.dtypes)
-    df.fillna(0, inplace=True)
-    dfs.append(df)
-    i+=1
-    #print(df.columns)
-  return dfs
+
+def get_nearest_stations_data(
+    nearest_stations_csvs,
+    min_start_year,
+    max_end_year,
+    wantedStationCSV=False,
+    RelativeAnglesDegrees=[(0, 0)],
+    usecols=[],
+    dtype={},
+):
+    dfs = []
+    i = 0
+    for f in nearest_stations_csvs:
+        # Read the CSV file with specified columns and data types
+        df = pd.read_csv(
+            f,
+            delimiter=",",
+            index_col=False,
+            usecols=usecols,
+            dtype=dtype,
+            on_bad_lines="skip",
+        )
+
+        df = process_data(
+            df,
+            usecols,
+            min_start_year,
+            max_end_year,
+            i,
+            wantedStationCSV=wantedStationCSV,
+            RelativeAnglesDegrees=RelativeAnglesDegrees,
+        )
+
+        # print(df.dtypes)
+        df.fillna(0, inplace=True)
+        dfs.append(df)
+        i += 1
+        # print(df.columns)
+    return dfs
 
 def chunk(df, interval = 25):
   results = []
@@ -355,7 +431,7 @@ def normalize_column(column, wanted_df, aux_dfs):
 
 columns_to_normalize = [COLUMN_NAMES["GHI"], COLUMN_NAMES["DNI"], COLUMN_NAMES["DHI"], COLUMN_NAMES["WIND_SPEED"]]
 
-def normalize_dataframes(wanted_df, aux_dfs):
+def normalize_dataframes(wanted_df: pd.DataFrame, aux_dfs: list[pd.DataFrame]):
   meanGHI = 0
   stdGHI = 0
   for column in columns_to_normalize:
@@ -365,7 +441,8 @@ def normalize_dataframes(wanted_df, aux_dfs):
       meanGHI = mean
       stdGHI = std
 
-  return wanted_df, aux_dfs, meanGHI, stdGHI
+  return [wanted_df], aux_dfs, meanGHI, stdGHI
+
 
 def get_relative_angle_degrees(nearest_stations):
   RelativeAnglesDegrees = []
@@ -382,7 +459,7 @@ def getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datad
   #doing all thats needed to get Auxillary stations data ready and in chunked tensors and in order chunked
   modified_nearest_stations = modify_nearest_stations(nearest_stations)
   nearest_stations_csvs, station_order = find_stations_csv(modified_nearest_stations, csv_files)
-  nearest_stations_data_dfs, _, _ = get_nearest_stations_data(nearest_stations_csvs=nearest_stations_csvs, min_start_year=min_start_year, max_end_year=max_end_year, wantedStationCSV=False, RelativeAnglesDegrees=RelativeAnglesDegrees, usecols=usecols, dtype=dtype)
+  nearest_stations_data_dfs = get_nearest_stations_data(nearest_stations_csvs=nearest_stations_csvs, min_start_year=min_start_year, max_end_year=max_end_year, wantedStationCSV=False, RelativeAnglesDegrees=RelativeAnglesDegrees, usecols=usecols, dtype=dtype)
   for i in range(k):
     nearest_stations_data_dfs[i]["distanceX"] = [nearest_stations['distance'].values[i][1][0]]*len(nearest_stations_data_dfs[i])
     nearest_stations_data_dfs[i]["distanceY"] = [nearest_stations['distance'].values[i][1][1]]*len(nearest_stations_data_dfs[i])
@@ -413,7 +490,7 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
     nearest_stations_data_dfs, aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
     
     # Get Wanted Station DataFrame
-    wanted_station_data_dfs, meanGHI, stdGHI = get_nearest_stations_data(wanted_station_csv, max_start_year, min_end_year, wantedStationCSV=True, usecols=usecols, dtype=dtype)
+    wanted_station_data_dfs = get_nearest_stations_data(wanted_station_csv, max_start_year, min_end_year, wantedStationCSV=True, usecols=usecols, dtype=dtype)
 
     #Normalize all stations data.
     wanted_station_data_dfs, aux_stations_dfs, meanGHI, stdGHI = normalize_dataframes(wanted_station_data_dfs[0], aux_stations_dfs)
