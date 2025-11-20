@@ -485,6 +485,7 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
 
     # Get Relative Angles in Degrees for Wind Direction Adjustment
     RelativeAnglesDegrees = get_relative_angle_degrees(nearest_stations)
+    # Also used to adjust wind speed to be relative to wanted stations direction 
 
     # Get Auxillary Stations DataFrames
     nearest_stations_data_dfs, aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
