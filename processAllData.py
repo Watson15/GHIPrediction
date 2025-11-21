@@ -48,7 +48,9 @@ def denormalizeHourOrMonth(anglesin, anglecos, cycleLength):
   cycleBeforeModulo = (angle / (2 * np.pi)) * cycleLength + 1
   return (cycleBeforeModulo % cycleLength)
 
-
+def denormalize_non_cyclical(col, mean, std):
+  denormalized_col = (col * std) + mean
+  return denormalized_col
 # Euclidean distance function
 def euclidean_distance(lat1, lon1, lat2, lon2):
   distance_vector = ((lat2 - lat1), lon2 - lon1)
@@ -87,12 +89,22 @@ def latlon_to_xy(lat, lon, lat0):
   return x, y
 
 def compute_angle(vec1, vec2):
+  """
+    returns the angle between two vectors in radians.
+    θ=arccos(∥v1​∥∥v2​∥v1​⋅v2​​)
+  """
+  # Compute the magnitudes (norms), This gives the Euclidean length of each vector.
   norm1 = np.linalg.norm(vec1)
   norm2 = np.linalg.norm(vec2)
+  # If either vector has length zero, the angle is undefined.
   if norm1 == 0 or norm2 == 0:
     return 0  # Could return np.pi to maximize diversity if desired
+  # Normalize both vectors
+  # This scales the vectors so they have length 1.
+  # Now the dot product becomes just the cosine of the angle between them.
   unit1 = vec1 / norm1
   unit2 = vec2 / norm2
+  # Compute the dot product with clipping to avoid floating point errors
   return np.arccos(np.clip(np.dot(unit1, unit2), -1.0, 1.0))
 
 def makeDistanceTuple(distance, x, y):
@@ -410,6 +422,7 @@ def getMaxStartMinEndYearComplete(max_start_year, min_end_year):
 
 def normalize_column(column, wanted_df, aux_dfs):
   # Calculate mean and std across all dataframes. Can use mean of means as they all have same length
+  # It is a sample of an infinite population which we wish to make a statement about the entire population. Hence using N-1 in denominator. 
   wanted_mean = wanted_df[column].mean()
   wanted_std = wanted_df[column].std()
 
@@ -444,7 +457,7 @@ def normalize_dataframes(wanted_df: pd.DataFrame, aux_dfs: list[pd.DataFrame]):
   return [wanted_df], aux_dfs, meanGHI, stdGHI
 
 
-def get_relative_angle_degrees(nearest_stations):
+def get_relative_angle_degrees(nearest_stations: pd.DataFrame):
   RelativeAnglesDegrees = []
   for distanceVector in nearest_stations["distance"].values:
     Relative_Angle_Radians = np.arctan2(distanceVector[1][1], distanceVector[1][0])#Relative Distance Vector y and Distance Vector x
