@@ -58,7 +58,7 @@ class LocationSpecificNN(nn.Module):
         return out  # (batch, seq, 1)
 
 class Main_LSTM(nn.Module):
-    def __init__(self, dropout=0.0, num_aux_stations=3):
+    def __init__(self, dropout=0.05, num_aux_stations=3):
         """
         input_dim: Number of features per time step (here, 5)
         hidden_dim: Number of hidden units in the LSTM

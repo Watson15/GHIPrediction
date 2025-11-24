@@ -32,6 +32,7 @@ def getEachStationLatLongFromCSV(csv_file):
     stdGIHIS.append(stdGHI1)
     stationNames.append(station_name)
     combined_chunked_data_tensor = torch.cat((combined_chunked_data_tensor, combined_chunked_data_tensor1), dim=0)
+  return combined_chunked_data_tensor
 
 def euclidean_distance(lat1, lon1, lat2, lon2):
   distance_vector = ((lat2 - lat1), lon2 - lon1)
