@@ -9,31 +9,6 @@ import torch
 from constants import COLUMN_NAMES, DTYPE_NON_CLOUD, USECOLS_NON_CLOUD
 
 
-def getEachStationLatLongFromCSV(csv_file):
-  df = pd.read_csv(csv_file, delimiter=',', index_col=False, usecols=["Latitude", "Longitude", "station"], dtype={"Latitude": float, "Longitude":float, "station": str}, on_bad_lines='skip')
-  path = 'Datasets/CWEEDS_2020_BC_raw'
-  csv_files = glob.glob(os.path.join(path, "*.csv"))
-  file_path = 'Datasets/stationsName_lat_long_data.csv'
-  stationsName_lat_long_datadf = pd.read_csv(file_path, delimiter=',', on_bad_lines='skip')
-
-  num_aux_stations = 4
-  combined_chunked_data_tensor = torch.empty((0, 25, 42)) # 25, 42 is for non cloud data which has 42 features and chunk size of 25
-  meanGIHIS = []
-  stdGIHIS = []
-  stationNames=[]
-  for row in df.itertuples():
-    latitude = row.Latitude
-    longitude = row.Longitude
-    station_name = row.station
-    
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
-    combined_chunked_data_tensor1 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
-    meanGIHIS.append(meanGHI1)
-    stdGIHIS.append(stdGHI1)
-    stationNames.append(station_name)
-    combined_chunked_data_tensor = torch.cat((combined_chunked_data_tensor, combined_chunked_data_tensor1), dim=0)
-  return combined_chunked_data_tensor
-
 def euclidean_distance(lat1, lon1, lat2, lon2):
   distance_vector = ((lat2 - lat1), lon2 - lon1)
   return ((np.sqrt((lat2 - lat1)**2) + (lon2 - lon1)**2), distance_vector)
@@ -391,10 +366,12 @@ def getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datad
   modified_nearest_stations = modify_nearest_stations(nearest_stations)
   nearest_stations_csvs, station_order = find_stations_csv(modified_nearest_stations, csv_files)
   nearest_stations_data_dfs = get_nearest_stations_data(nearest_stations_csvs=nearest_stations_csvs, min_start_year=min_start_year, max_end_year=max_end_year, wantedStationCSV=False, RelativeAnglesDegrees=RelativeAnglesDegrees, usecols=usecols, dtype=dtype)
-  for i in range(k):
-    nearest_stations_data_dfs[i]["distanceX"] = [nearest_stations['distance'].values[i][1][0]]*len(nearest_stations_data_dfs[i])
-    nearest_stations_data_dfs[i]["distanceY"] = [nearest_stations['distance'].values[i][1][1]]*len(nearest_stations_data_dfs[i])
-
+  try:
+    for i in range(len(nearest_stations_data_dfs)):
+      nearest_stations_data_dfs[i]["distanceX"] = [nearest_stations['distance'].values[i][1][0]]*len(nearest_stations_data_dfs[i])
+      nearest_stations_data_dfs[i]["distanceY"] = [nearest_stations['distance'].values[i][1][1]]*len(nearest_stations_data_dfs[i])
+  except Exception as e:
+    print("Error in adding distanceX and distanceY columns: ", e)
   return nearest_stations_data_dfs, nearest_stations_data_dfs
 
 
@@ -433,11 +410,11 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
     # Get Wanted Station Chunked Tensors
     wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
     
-    return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI, aux_stations_dfs, wanted_station_data_dfs
+    return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI#, aux_stations_dfs, wanted_station_data_dfs
   
   except Exception as e:
     print("Error in getAllReadyForStationByLatAndLongAndK: ", e)
-    return None, None, None, None, None, None, None, None
+    return None, None, None, None, None, None#, None, None
 
 
 def getAllReadyForStationByLatAndLongAndKSplitTestAndTrain(stationsName_lat_long_datadf, lat, long, k, csv_files, usecols=[], dtype={}):
@@ -478,3 +455,28 @@ def getAllReadyForStationByLatAndLongAndKSplitTestAndTrain(stationsName_lat_long
   testSet_wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, testSet_wanted_station_data_dfs, 25)
 
   return trainSet_wanted_chunked_tensors, testSet_wanted_chunked_tensors, wanted_station["station"].values[0], trainSet_aux_chunked_tensors, testSet_aux_chunked_tensors, trainSet_aux_chunked_station_order, testSet_aux_chunked_station_order
+
+
+def getEachStationLatLongFromCSV(stationsName_lat_long_datadf, num_aux_stations, csv_files) -> tuple[torch.Tensor, list, list, list]:
+  #df = pd.read_csv(csv_file, delimiter=',', index_col=False, usecols=["Latitude", "Longitude", "station"], dtype={"Latitude": float, "Longitude":float, "station": str}, on_bad_lines='skip')
+
+  combined_chunked_data_tensor = torch.empty((0, 25, 42)) # 25, 42 is for non cloud data which has 42 features and chunk size of 25
+  meanGIHIS = []
+  stdGIHIS = []
+  stationNames=[]
+  for row in stationsName_lat_long_datadf.itertuples():
+    latitude = row.Latitude
+    longitude = row.Longitude
+    #station_name = row.station
+    if latitude>55.75 or latitude<49.5 or longitude>-115 or longitude<-132.5 or pd.isna(latitude) or pd.isna(longitude):
+      continue # Skip the stations outside the desired range
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf=stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    if wanted_chunked_tensors is None:
+      print(f"Skipping station at lat: {latitude}, long: {longitude} due to error.")
+      continue
+    combined_chunked_data_tensor1 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
+    meanGIHIS.append(meanGHI1)
+    stdGIHIS.append(stdGHI1)
+    stationNames.append(wanted_station_name)
+    combined_chunked_data_tensor = torch.cat((combined_chunked_data_tensor, combined_chunked_data_tensor1), dim=0)
+  return combined_chunked_data_tensor, meanGIHIS, stdGIHIS, stationNames

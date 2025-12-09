@@ -10,8 +10,9 @@ import torch.nn as nn
 
 #import torch.nn.functional as F
 import torch.optim as optim
+from constants import DTYPE_NON_CLOUD, USECOLS_NON_CLOUD
 from dataRetrieval import (
-    getEachStationLatLongFromCSV
+    getAllReadyForStationByLatAndLongAndK,
 )
 from LSTMArchitecture import GHIDataset, Main_LSTM
 from torch.utils.data import DataLoader
@@ -40,28 +41,40 @@ def test_model(model, test_loader, criterion, device):
     return outputlist, targetData, colourList
 
 def main():
-    path = 'Datasets/CWEEDS_2020_BC_cleaned_non_cloud'
+    path = 'Datasets/CWEEDS_2020_BC_raw'
     csv_files = glob.glob(os.path.join(path, "*.csv"))
 
     file_path = 'Datasets/stationsName_lat_long_data.csv'
-    numAuxStations = 4
+    num_aux_stations = 4
     stationsName_lat_long_datadf = pd.read_csv(file_path, delimiter=',', on_bad_lines='skip')
-    
-    combined_chunked_data_tensor, meanGIHIS, stdGIHIS, stationNames = getEachStationLatLongFromCSV(stationsName_lat_long_datadf=stationsName_lat_long_datadf, num_aux_stations=numAuxStations, csv_files=csv_files)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -131.75, 54.5, num_aux_stations, csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    combined_chunked_data_tensor1 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI2, stdGHI2 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -123, 50,num_aux_stations, csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    combined_chunked_data_tensor2 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI3, stdGHI3 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -123.5, 48,num_aux_stations, csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    combined_chunked_data_tensor3 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI4, stdGHI4 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -122.5, 60,num_aux_stations, csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    combined_chunked_data_tensor4 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI5, stdGHI5 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf.copy(), -127.75, 51,num_aux_stations, csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    combined_chunked_data_tensor5 = torch.cat(wanted_chunked_tensors + aux_chunked_tensors, dim=2)
+    combined_chunked_data_tensor = torch.cat([combined_chunked_data_tensor1, combined_chunked_data_tensor2, combined_chunked_data_tensor3, combined_chunked_data_tensor4, combined_chunked_data_tensor5], dim=0)
 
-    mean_MeansGHI = np.mean(meanGIHIS)
-    std_MeansGHI = np.mean(stdGIHIS)
-
+    mean_MeansGHI = np.mean([meanGHI1, meanGHI2, meanGHI3, meanGHI4, meanGHI5])
+    std_MeansGHI = np.mean([stdGHI1, stdGHI2, stdGHI3, stdGHI4, stdGHI5])
+   
+    #Deleting all tensors and data no longer needed to save space on RAM
+    del wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order
+    del combined_chunked_data_tensor1, combined_chunked_data_tensor2, combined_chunked_data_tensor3, combined_chunked_data_tensor4, combined_chunked_data_tensor5
     # Check if GPU is available and set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
     #dataset = GHIDataset(combined_chunked_data_tensor, device=device)
     dataset = GHIDataset(combined_chunked_data_tensor, device=device)
     train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
-    mainModel = Main_LSTM(num_aux_stations=numAuxStations).to(device)
+    mainModel = Main_LSTM(num_aux_stations=num_aux_stations).to(device)
     mainModel = torch.compile(mainModel)
     #mainModel = Main_LSTM()
-    criterion = nn.RMSELoss()  # Root Mean Squared Error is common for timeseries tasks
+    criterion = nn.MSELoss()  # Mean Squared Error is common for regression tasks
     optimizer_main = optim.Adam(mainModel.parameters(), lr=0.001)
     num_epochs = 100
     loss_per_epoch = []
@@ -94,8 +107,6 @@ def main():
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.8f}")
     # Saving the model to the correct folder. Use the correct naming schema outlined in the README
     from pathlib import Path  #For loading a specific file
-    # Final save path
-    save_path = str(models_dir / "model_4_all_stations_v1.pth")
     try: 
         # Current working directory
         current_directory = Path().resolve()
@@ -104,7 +115,10 @@ def main():
         models_dir = current_directory / "Models"
         
         # Make sure the directory exists
-        models_dir.mkdir(parents=True, exist_ok=True) 
+        models_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Final save path
+        save_path = str(models_dir / "model_3_5_1.pth")
         
         print(f"Model will be saved to: {save_path}")
         torch.save(mainModel.state_dict(), save_path)
@@ -119,6 +133,9 @@ def main():
         
         # Make sure the directory exists
         models_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Final save path
+        save_path = str(models_dir / "model_3_5_1.pth")
         
         print(f"Model will be saved to: {save_path}")
         torch.save(mainModel.state_dict(), save_path)
