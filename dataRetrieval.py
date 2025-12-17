@@ -1,3 +1,4 @@
+
 #import glob  # For loading multiple files
 import os
 
@@ -42,7 +43,7 @@ def compute_angle(vec1, vec2):
 def makeDistanceTuple(distance, x, y):
   return (distance, (x,y))
 
-def getEastWestNorthSouthOrder(result_df):
+def getEastWestNorthSouthOrder(result_df, num_stations=3):
   ordered_rows = []
 
   # Make a copy so we can remove selected stations
@@ -68,7 +69,9 @@ def getEastWestNorthSouthOrder(result_df):
       south_idx = df_copy['y'].idxmin()
       ordered_rows.append(df_copy.loc[south_idx])
       df_copy = df_copy.drop(south_idx)
-
+  if len(ordered_rows) != num_stations:
+    print("Warning: Number of ordered stations does not match expected num_stations.")
+    raise Exception(f"Error in getEastWestNorthSouthOrder: Number of ordered stations does not match expected num_stations. {len(ordered_rows)} != {num_stations}")
   # Convert back to DataFrame
   return pd.DataFrame(ordered_rows).reset_index(drop=True)
 
@@ -161,7 +164,7 @@ def spatially_diverse_knn(df,station_name, k=3, candidate_pool=78):
   # Order by East -> West -> North/South
   # Convert selected_rows to DataFrame
   result_df = pd.DataFrame(selected_rows).reset_index(drop=True)
-  result_df = getEastWestNorthSouthOrder(result_df)
+  result_df = getEastWestNorthSouthOrder(result_df,num_stations=k)
 
   return result_df, center_latlon
 

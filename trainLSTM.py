@@ -10,9 +10,7 @@ import torch.nn as nn
 
 #import torch.nn.functional as F
 import torch.optim as optim
-from dataRetrieval import (
-    getEachStationLatLongFromCSV
-)
+from dataRetrieval import getEachStationLatLongFromCSV
 from LSTMArchitecture import GHIDataset, Main_LSTM
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -94,8 +92,7 @@ def main():
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.8f}")
     # Saving the model to the correct folder. Use the correct naming schema outlined in the README
     from pathlib import Path  #For loading a specific file
-    # Final save path
-    save_path = str(models_dir / "model_4_all_stations_v1.pth")
+    
     try: 
         # Current working directory
         current_directory = Path().resolve()
@@ -105,6 +102,9 @@ def main():
         
         # Make sure the directory exists
         models_dir.mkdir(parents=True, exist_ok=True) 
+        
+        # Final save path
+        save_path = str(models_dir / "model_4_all_stations_v1.pth")
         
         print(f"Model will be saved to: {save_path}")
         torch.save(mainModel.state_dict(), save_path)
@@ -119,6 +119,9 @@ def main():
         
         # Make sure the directory exists
         models_dir.mkdir(parents=True, exist_ok=True)
+
+        # Final save path
+        save_path = str(models_dir / "model_4_all_stations_v1.pth")
         
         print(f"Model will be saved to: {save_path}")
         torch.save(mainModel.state_dict(), save_path)
