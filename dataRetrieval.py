@@ -1,4 +1,4 @@
-import glob  # For loading multiple files
+#import glob  # For loading multiple files
 import os
 
 import numpy as np
@@ -101,33 +101,63 @@ def spatially_diverse_knn(df,station_name, k=3, candidate_pool=78):
 
   # Convert to x/y coords
   lat0 = center_latlon[0]
+  #print("center lat long: ", center_latlon)
   df_filtered['x'], df_filtered['y'] = latlon_to_xy(df_filtered['Latitude'], df_filtered['Longitude'], lat0)
   center_x, center_y = latlon_to_xy(center_latlon[0], center_latlon[1], lat0)
   center_xy = np.array([center_x, center_y])
-
+  #print("Center XY: ", center_xy)
   # Compute distances
   df_filtered['distance'] = np.linalg.norm(df_filtered[['x', 'y']].values - center_xy, axis=1)
-  df_sorted = df_filtered.sort_values('distance').head(candidate_pool)
+  df_filtered[['x', 'y']] = df_filtered[['x', 'y']].values - center_xy
+  center_xy = np.array([0.0, 0.0])  # Center at origin for angle calculations
+  df_sorted = df_filtered.sort_values('distance', key=lambda s: s.abs()).head(candidate_pool) # Sort by absolute value of distance
   df_sorted['distance'] = df_sorted.apply(lambda row: makeDistanceTuple(row['distance'], row['x'], row['y']), axis=1)
+  #df_sorted.drop(columns=['x', 'y'], inplace=True)
   #print("After sorting by distance")
   #print(df_sorted.head())
   selected_rows = []
-  selected_xy = []
+  #selected_xy = []
+  #print("sorted is monotonic")
+  #print(df_sorted['distance'].apply(lambda t: t[0]).is_monotonic_increasing)
+  #print(df_sorted.head())
+  #print(df_sorted.columns.to_list())
+  # for idx, row in df_sorted.iterrows():
+  #   cand_xy = np.array([row['distance'][1][0], row['distance'][1][1]])  # row['distance'] = ( distance, (x, y) )
+  #   if len(selected_xy) == 0: #gets closest station
+  #     selected_rows.append(row)
+  #     selected_xy.append(cand_xy)
+  #   else:
+  #     angles = [compute_angle(cand_xy, s) for s in selected_xy] # Is the station looking at a similar direction to any already selected stations
+  #     min_angle = min(angles)
+  #     if min_angle > np.radians(45) or len(selected_xy) < k // 2:
+  #       selected_rows.append(row)
+  #       selected_xy.append(cand_xy)
+  #   if len(selected_rows) == k:
+  #     break
+  stations = dict.fromkeys(['west', 'east', 'north', 'south'])
 
-  for idx, row in df_sorted.iterrows():
-    cand_xy = np.array([row['distance'][1][0], row['distance'][1][1]])
-    if len(selected_xy) == 0: #gets closest station
-      selected_rows.append(row)
-      selected_xy.append(cand_xy)
-    else:
-      angles = [compute_angle(cand_xy - center_xy, s - center_xy) for s in selected_xy]
-      min_angle = min(angles)
-      if min_angle > np.radians(45) or len(selected_xy) < k // 2:
-        selected_rows.append(row)
-        selected_xy.append(cand_xy)
-    if len(selected_rows) == k:
-      break
-    
+  for d, (x, y) in df_sorted['distance']:
+    if stations['west'] is None and x < 0 and abs(x) > abs(y):
+        stations['west'] = (x, y)
+        #print("got west station")
+        selected_rows.append(df_sorted.loc[df_sorted['distance'] == makeDistanceTuple(d, x, y)].iloc[0])
+    elif stations['east'] is None and x > 0 and abs(x) > abs(y):
+        stations['east'] = (x, y)
+        #print("got east station")
+        selected_rows.append(df_sorted.loc[df_sorted['distance'] == makeDistanceTuple(d, x, y)].iloc[0])
+    elif stations['north'] is None and y > 0 and abs(y) > abs(x):
+        stations['north'] = (x, y)
+        #print("got north station")
+        selected_rows.append(df_sorted.loc[df_sorted['distance'] == makeDistanceTuple(d, x, y)].iloc[0])
+    elif stations['south'] is None and y < 0 and abs(y) > abs(x):
+        stations['south'] = (x, y)
+        #print("got south station")
+        selected_rows.append(df_sorted.loc[df_sorted['distance'] == makeDistanceTuple(d, x, y)].iloc[0])
+
+    if all(stations.values()):
+        print("All directions filled.")
+        break
+  #print("selected rows: ", selected_rows)
   # Order by East -> West -> North/South
   # Convert selected_rows to DataFrame
   result_df = pd.DataFrame(selected_rows).reset_index(drop=True)
@@ -342,7 +372,7 @@ def normalize_dataframes(wanted_df: pd.DataFrame, aux_dfs: list[pd.DataFrame]):
   stdGHI = 0
   for column in columns_to_normalize:
     wanted_df, aux_dfs, mean, std = normalize_column(column, wanted_df, aux_dfs)
-    print(f"Normalized {column} with mean: {mean}, std: {std}")
+    #print(f"Normalized {column} with mean: {mean}, std: {std}")
     if column == COLUMN_NAMES["GHI"]:
       meanGHI = mean
       stdGHI = std
@@ -379,6 +409,48 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
   try:
     #doing everything needed to get wanted stations data ready and in chunked tensors as well as get wanted station and its name
     wanted_station = find_nearest_station_given_long_lat(stationsName_lat_long_datadf, lat, long)
+    max_start_year = wanted_station["StartTime"].values[0]
+    min_end_year = wanted_station["EndTime"].values[0]
+
+    wanted_station.at[wanted_station.index[0], "distance"] = (0.0, (0.0, 0.0))
+    wanted_station_modified = modify_nearest_stations({"station": wanted_station["station"]})
+    wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
+    nearest_stations, target_point = spatially_diverse_knn(stationsName_lat_long_datadf, wanted_station["station"].values[0], k)
+    
+    max_start_year, min_end_year = max(max_start_year, *nearest_stations["StartTime"].values), min(min_end_year, *nearest_stations["EndTime"].values)
+    max_start_year, min_end_year = getMaxStartMinEndYearComplete(max_start_year, min_end_year)
+    print(max_start_year, min_end_year)
+
+    # Get Relative Angles in Degrees for Wind Direction Adjustment
+    RelativeAnglesDegrees = get_relative_angle_degrees(nearest_stations)
+    # Also used to adjust wind speed to be relative to wanted stations direction 
+
+    # Get Auxillary Stations DataFrames
+    nearest_stations_data_dfs, aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
+    
+    # Get Wanted Station DataFrame
+    wanted_station_data_dfs = get_nearest_stations_data(wanted_station_csv, max_start_year, min_end_year, wantedStationCSV=True, usecols=usecols, dtype=dtype)
+
+    #Normalize all stations data.
+    wanted_station_data_dfs, aux_stations_dfs, meanGHI, stdGHI = normalize_dataframes(wanted_station_data_dfs[0], aux_stations_dfs)
+
+    # Get Auxillary Stations Chunked Tensors
+    aux_chunked_tensors, aux_chunked_station_order = get_chunked_tensors(nearest_stations, nearest_stations_data_dfs, 25)
+
+    # Get Wanted Station Chunked Tensors
+    wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
+    
+    return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI#, aux_stations_dfs, wanted_station_data_dfs
+  
+  except Exception as e:
+    print("Error in getAllReadyForStationByLatAndLongAndK: ", e)
+    return None, None, None, None, None, None#, None, None
+  
+
+def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName_lat_long_datadf, lat, long, k, csv_files, usecols=[], dtype={}):
+  try:
+    #doing everything needed to get wanted stations data ready and in chunked tensors as well as get wanted station and its name
+    #print("wanted station: ", wanted_station)
     max_start_year = wanted_station["StartTime"].values[0]
     min_end_year = wanted_station["EndTime"].values[0]
 
@@ -467,10 +539,19 @@ def getEachStationLatLongFromCSV(stationsName_lat_long_datadf, num_aux_stations,
   for row in stationsName_lat_long_datadf.itertuples():
     latitude = row.Latitude
     longitude = row.Longitude
+    #print("row: ", row)
     #station_name = row.station
-    if latitude>55.75 or latitude<49.5 or longitude>-115 or longitude<-132.5 or pd.isna(latitude) or pd.isna(longitude):
+    if ((latitude>55.75) or (latitude<49.5) or (abs(longitude)<115) or (abs(longitude)>132.5) or pd.isna(latitude) or pd.isna(longitude)):
+      print(f"Skipping station at lat: {latitude}, long: {longitude} due to being outside desired range.")
       continue # Skip the stations outside the desired range
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf=stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    wanted_station = pd.DataFrame()
+    wanted_station["station"] = [row.station]
+    wanted_station["Latitude"] = [row.Latitude]
+    wanted_station["Longitude"] = [row.Longitude]
+    wanted_station["distance"] = [(0.0, (0.0, 0.0))]
+    wanted_station["StartTime"] = [row.StartTime]
+    wanted_station["EndTime"] = [row.EndTime]
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName_lat_long_datadf=stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
     if wanted_chunked_tensors is None:
       print(f"Skipping station at lat: {latitude}, long: {longitude} due to error.")
       continue

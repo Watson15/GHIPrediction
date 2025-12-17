@@ -145,7 +145,7 @@ def main():
         plt.ylabel('Difference')
         plt.title('LSTM Difference Plot') # from training on ROSE-SPIT-(AUT), WHISTLER---NESTERS, ESQUIMALT-HARBOUR, FORT-NELSON-A and HERBERT-ISLAND-(AUT)
         plt.grid()
-        plt.savefig("LSTM_Difference_Plot_3_5_1.png")
+        plt.savefig("LSTM_Difference_Plot_4_all_station_v1.png")
         plt.show()
 
         plt.scatter(targetGHI.flatten(), outputGHI.flatten(), c=colourList[:,10].flatten(), alpha=0.25)
@@ -156,7 +156,7 @@ def main():
         plt.ylabel('Predicted GHI')
         plt.title('LSTM Predicted vs Actual GHI Plot')# from training on ROSE-SPIT-(AUT), WHISTLER---NESTERS, ESQUIMALT-HARBOUR, FORT-NELSON-A and HERBERT-ISLAND-(AUT)
         plt.grid()
-        plt.savefig("LSTM_Predicted_vs_Actual_GHI_Plot_3_5_1.png")
+        plt.savefig("LSTM_Predicted_vs_Actual_GHI_Plot_4_all_station_v1.png")
         plt.show()
     except Exception as e:
         print("Error occurred while testing the model:", e)
