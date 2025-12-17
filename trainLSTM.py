@@ -59,7 +59,7 @@ def main():
     mainModel = Main_LSTM(num_aux_stations=numAuxStations).to(device)
     mainModel = torch.compile(mainModel)
     #mainModel = Main_LSTM()
-    criterion = nn.RMSELoss()  # Root Mean Squared Error is common for timeseries tasks
+    criterion = nn.MSELoss()  # Mean Squared Error is common for timeseries tasks
     optimizer_main = optim.Adam(mainModel.parameters(), lr=0.001)
     num_epochs = 100
     loss_per_epoch = []
