@@ -160,6 +160,9 @@ def spatially_diverse_knn(df,station_name, k=3, candidate_pool=78):
     if all(stations.values()):
         print("All directions filled.")
         break
+  if not all(stations.values()):
+     print("Warning: Not all directions could be filled with stations.")
+     raise Exception("Error in spatially_diverse_knn: Not all directions could be filled with stations.")
   #print("selected rows: ", selected_rows)
   # Order by East -> West -> North/South
   # Convert selected_rows to DataFrame
