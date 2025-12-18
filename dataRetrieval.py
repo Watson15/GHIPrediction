@@ -167,7 +167,7 @@ def spatially_diverse_knn(df,station_name, k=3, candidate_pool=78):
   # Convert selected_rows to DataFrame
   result_df = pd.DataFrame(selected_rows).reset_index(drop=True)
   result_df = getEastWestNorthSouthOrder(result_df,num_stations=k)
-  
+
   return result_df, center_latlon
 
 
@@ -549,6 +549,7 @@ def getEachStationLatLongFromCSV(stationsName_lat_long_datadf, num_aux_stations,
   meanGIHIS = []
   stdGIHIS = []
   stationNames=[]
+  stationData = []
   for row in stationsName_lat_long_datadf.itertuples():
     latitude = row.Latitude
     longitude = row.Longitude
@@ -564,7 +565,7 @@ def getEachStationLatLongFromCSV(stationsName_lat_long_datadf, num_aux_stations,
     wanted_station["distance"] = [(0.0, (0.0, 0.0))]
     wanted_station["StartTime"] = [row.StartTime]
     wanted_station["EndTime"] = [row.EndTime]
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1, stationData = getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName_lat_long_datadf=stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1, station_data = getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName_lat_long_datadf=stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
     if wanted_chunked_tensors is None:
       print(f"Skipping station at lat: {latitude}, long: {longitude} due to error.")
       continue
@@ -572,5 +573,6 @@ def getEachStationLatLongFromCSV(stationsName_lat_long_datadf, num_aux_stations,
     meanGIHIS.append(meanGHI1)
     stdGIHIS.append(stdGHI1)
     stationNames.append(wanted_station_name)
+    stationData.append(station_data)
     combined_chunked_data_tensor = torch.cat((combined_chunked_data_tensor, combined_chunked_data_tensor1), dim=0)
   return combined_chunked_data_tensor, meanGIHIS, stdGIHIS, stationNames, stationData
