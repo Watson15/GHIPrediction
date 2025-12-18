@@ -94,7 +94,7 @@ class Main_LSTM(nn.Module):
     - Pre-allocate tensors where possible
     - Reduce loop iterations
     """
-    def __init__(self, dropout=0.05, num_aux_stations=3):
+    def __init__(self, dropout=0.05, num_aux_stations=4):
         """
         Args:
             dropout: Dropout probability for regularization
@@ -110,7 +110,7 @@ class Main_LSTM(nn.Module):
         # Main LSTM processes combined data from all stations
         # Input: 10 (main) + num_aux*8 (auxiliary processed) features
         # Hidden: 128 units across 3 layers
-        self.Stationlstm = nn.LSTM(num_input, 128, 3,
+        self.Stationlstm = nn.LSTM(num_input, 128, 4,
                                     batch_first=True, dropout=dropout)
         
         # Smaller LSTM for each auxiliary station

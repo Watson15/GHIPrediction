@@ -55,13 +55,13 @@ def main():
     print("Using device:", device)
     #dataset = GHIDataset(combined_chunked_data_tensor, device=device)
     dataset = GHIDataset(combined_chunked_data_tensor, device=device, station_data=stationData)
-    train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    train_loader = DataLoader(dataset, batch_size=48, shuffle=True)
     mainModel = Main_LSTM(num_aux_stations=numAuxStations).to(device)
     mainModel = torch.compile(mainModel)
     #mainModel = Main_LSTM()
     criterion = nn.MSELoss()  # Mean Squared Error is common for timeseries tasks
-    optimizer_main = optim.Adam(mainModel.parameters(), lr=0.001)
-    num_epochs = 100
+    optimizer_main = optim.Adam(mainModel.parameters(), lr=0.00025)
+    num_epochs = 125
     loss_per_epoch = []
     for epoch in tqdm(range(num_epochs)):
         mainModel.train()
