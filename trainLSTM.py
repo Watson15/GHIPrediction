@@ -73,9 +73,11 @@ def main():
             #target = target.to(device)      # shape: (batch_size,)
 
             optimizer_main.zero_grad()
-
+            print(inputs.shape)
+            print(inputs.station_data)
             # Forward pass: predict GHI
-            output = mainModel(inputs, stationData)          # shape: (batch_size, 1)
+            station_data = dataset.station_data[inputs.indices[:,0]]  # shape: (batch_size, num_station_features)
+            output = mainModel(inputs, station_data)          # shape: (batch_size, 1)
 
             # Compute loss (unsqueeze target if necessary to match output shape)
             loss = criterion(output, target.unsqueeze(1))

@@ -407,7 +407,7 @@ def getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datad
       nearest_stations_data_dfs[i]["distanceY"] = [nearest_stations['distance'].values[i][1][1]]*len(nearest_stations_data_dfs[i])
   except Exception as e:
     print("Error in adding distanceX and distanceY columns: ", e)
-  return nearest_stations_data_dfs, nearest_stations_data_dfs
+  return nearest_stations_data_dfs #, nearest_stations_data_dfs.copy()
 
 
 def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, long, k, csv_files, usecols=[], dtype={}):
@@ -422,7 +422,7 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
     wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
     nearest_stations, target_point = spatially_diverse_knn(stationsName_lat_long_datadf, wanted_station["station"].values[0], k)
     
-    station_data = [{"lat":0, "long":0, "elevation":0, "distance_to_main_station":0}]
+    station_data = [] #{"lat":0, "long":0, "elevation":0, "distance_to_main_station":0}
     for index, station in nearest_stations.iterrows():
       station_data.append({"lat":station["Latitude"], "long":station["Longitude"], "elevation":station["Elevation"], "distance_to_main_station":station["distance"][0]})
    
@@ -435,8 +435,8 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
     # Also used to adjust wind speed to be relative to wanted stations direction 
 
     # Get Auxillary Stations DataFrames
-    nearest_stations_data_dfs, aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
-    
+    aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
+    #nearest_stations_data_dfs, 
     # Get Wanted Station DataFrame
     wanted_station_data_dfs = get_nearest_stations_data(wanted_station_csv, max_start_year, min_end_year, wantedStationCSV=True, usecols=usecols, dtype=dtype)
 
@@ -444,7 +444,7 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
     wanted_station_data_dfs, aux_stations_dfs, meanGHI, stdGHI = normalize_dataframes(wanted_station_data_dfs[0], aux_stations_dfs)
 
     # Get Auxillary Stations Chunked Tensors
-    aux_chunked_tensors, aux_chunked_station_order = get_chunked_tensors(nearest_stations, nearest_stations_data_dfs, 25)
+    aux_chunked_tensors, aux_chunked_station_order = get_chunked_tensors(nearest_stations, aux_stations_dfs, 25)
 
     # Get Wanted Station Chunked Tensors
     wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
@@ -468,7 +468,7 @@ def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName
     wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
     nearest_stations, target_point = spatially_diverse_knn(stationsName_lat_long_datadf, wanted_station["station"].values[0], k)
     
-    station_data = [{"lat":0, "long":0, "elevation":0, "distance_to_main_station":0}]
+    station_data = [] #{"lat":0, "long":0, "elevation":0, "distance_to_main_station":0}
     for index, station in nearest_stations.iterrows():
       station_data.append({"lat":station["Latitude"], "long":station["Longitude"], "elevation":station["Elevation"], "distance_to_main_station":station["distance"][0]})
    
