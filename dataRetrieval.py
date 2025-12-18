@@ -1,6 +1,5 @@
 
 #import glob  # For loading multiple files
-import os
 
 import numpy as np
 import pandas as pd
@@ -168,7 +167,7 @@ def spatially_diverse_knn(df,station_name, k=3, candidate_pool=78):
   # Convert selected_rows to DataFrame
   result_df = pd.DataFrame(selected_rows).reset_index(drop=True)
   result_df = getEastWestNorthSouthOrder(result_df,num_stations=k)
-
+  
   return result_df, center_latlon
 
 
@@ -423,6 +422,10 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
     wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
     nearest_stations, target_point = spatially_diverse_knn(stationsName_lat_long_datadf, wanted_station["station"].values[0], k)
     
+    station_data = [{"lat":0, "long":0, "elevation":0, "distance_to_main_station":0}]
+    for index, station in nearest_stations.iterrows():
+      station_data.append({"lat":station["Latitude"], "long":station["Longitude"], "elevation":station["Elevation"], "distance_to_main_station":station["distance"][0]})
+   
     max_start_year, min_end_year = max(max_start_year, *nearest_stations["StartTime"].values), min(min_end_year, *nearest_stations["EndTime"].values)
     max_start_year, min_end_year = getMaxStartMinEndYearComplete(max_start_year, min_end_year)
     print(max_start_year, min_end_year)
@@ -446,11 +449,11 @@ def getAllReadyForStationByLatAndLongAndK(stationsName_lat_long_datadf, lat, lon
     # Get Wanted Station Chunked Tensors
     wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
     
-    return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI#, aux_stations_dfs, wanted_station_data_dfs
+    return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI, station_data#, aux_stations_dfs, wanted_station_data_dfs
   
   except Exception as e:
     print("Error in getAllReadyForStationByLatAndLongAndK: ", e)
-    return None, None, None, None, None, None#, None, None
+    return None, None, None, None, None, None, None#, None, None
   
 
 def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName_lat_long_datadf, lat, long, k, csv_files, usecols=[], dtype={}):
@@ -465,6 +468,10 @@ def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName
     wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
     nearest_stations, target_point = spatially_diverse_knn(stationsName_lat_long_datadf, wanted_station["station"].values[0], k)
     
+    station_data = [{"lat":0, "long":0, "elevation":0, "distance_to_main_station":0}]
+    for index, station in nearest_stations.iterrows():
+      station_data.append({"lat":station["Latitude"], "long":station["Longitude"], "elevation":station["Elevation"], "distance_to_main_station":station["distance"][0]})
+   
     max_start_year, min_end_year = max(max_start_year, *nearest_stations["StartTime"].values), min(min_end_year, *nearest_stations["EndTime"].values)
     max_start_year, min_end_year = getMaxStartMinEndYearComplete(max_start_year, min_end_year)
     print(max_start_year, min_end_year)
@@ -488,11 +495,11 @@ def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName
     # Get Wanted Station Chunked Tensors
     wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
     
-    return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI#, aux_stations_dfs, wanted_station_data_dfs
+    return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI, station_data#, aux_stations_dfs, wanted_station_data_dfs
   
   except Exception as e:
     print("Error in getAllReadyForStationByLatAndLongAndK: ", e)
-    return None, None, None, None, None, None#, None, None
+    return None, None, None, None, None, None, None#, None, None
 
 
 def getAllReadyForStationByLatAndLongAndKSplitTestAndTrain(stationsName_lat_long_datadf, lat, long, k, csv_files, usecols=[], dtype={}):
@@ -557,7 +564,7 @@ def getEachStationLatLongFromCSV(stationsName_lat_long_datadf, num_aux_stations,
     wanted_station["distance"] = [(0.0, (0.0, 0.0))]
     wanted_station["StartTime"] = [row.StartTime]
     wanted_station["EndTime"] = [row.EndTime]
-    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1 = getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName_lat_long_datadf=stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
+    wanted_chunked_tensors, wanted_station_name, aux_chunked_tensors, aux_chunked_station_order, meanGHI1, stdGHI1, stationData = getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName_lat_long_datadf=stationsName_lat_long_datadf.copy(), lat=latitude, long=longitude, k=num_aux_stations, csv_files=csv_files, usecols=USECOLS_NON_CLOUD, dtype=DTYPE_NON_CLOUD)
     if wanted_chunked_tensors is None:
       print(f"Skipping station at lat: {latitude}, long: {longitude} due to error.")
       continue
@@ -566,4 +573,4 @@ def getEachStationLatLongFromCSV(stationsName_lat_long_datadf, num_aux_stations,
     stdGIHIS.append(stdGHI1)
     stationNames.append(wanted_station_name)
     combined_chunked_data_tensor = torch.cat((combined_chunked_data_tensor, combined_chunked_data_tensor1), dim=0)
-  return combined_chunked_data_tensor, meanGIHIS, stdGIHIS, stationNames
+  return combined_chunked_data_tensor, meanGIHIS, stdGIHIS, stationNames, stationData

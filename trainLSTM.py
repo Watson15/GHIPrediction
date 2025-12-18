@@ -45,7 +45,7 @@ def main():
     numAuxStations = 4
     stationsName_lat_long_datadf = pd.read_csv(file_path, delimiter=',', on_bad_lines='skip')
     
-    combined_chunked_data_tensor, meanGIHIS, stdGIHIS, stationNames = getEachStationLatLongFromCSV(stationsName_lat_long_datadf=stationsName_lat_long_datadf, num_aux_stations=numAuxStations, csv_files=csv_files)
+    combined_chunked_data_tensor, meanGIHIS, stdGIHIS, stationNames, stationData = getEachStationLatLongFromCSV(stationsName_lat_long_datadf=stationsName_lat_long_datadf, num_aux_stations=numAuxStations, csv_files=csv_files)
 
     mean_MeansGHI = np.mean(meanGIHIS)
     std_MeansGHI = np.mean(stdGIHIS)
@@ -54,7 +54,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
     #dataset = GHIDataset(combined_chunked_data_tensor, device=device)
-    dataset = GHIDataset(combined_chunked_data_tensor, device=device)
+    dataset = GHIDataset(combined_chunked_data_tensor, device=device, station_data=stationData)
     train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
     mainModel = Main_LSTM(num_aux_stations=numAuxStations).to(device)
     mainModel = torch.compile(mainModel)
@@ -75,7 +75,7 @@ def main():
             optimizer_main.zero_grad()
 
             # Forward pass: predict GHI
-            output = mainModel(inputs)          # shape: (batch_size, 1)
+            output = mainModel(inputs, stationData)          # shape: (batch_size, 1)
 
             # Compute loss (unsqueeze target if necessary to match output shape)
             loss = criterion(output, target.unsqueeze(1))
