@@ -561,6 +561,7 @@ def getEachStationLatLongFromCSV(stationsName_lat_long_datadf, num_aux_stations,
     wanted_station = pd.DataFrame()
     wanted_station["station"] = [row.station]
     wanted_station["Latitude"] = [row.Latitude]
+    
     wanted_station["Longitude"] = [row.Longitude]
     wanted_station["distance"] = [(0.0, (0.0, 0.0))]
     wanted_station["StartTime"] = [row.StartTime]
