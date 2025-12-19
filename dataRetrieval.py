@@ -463,7 +463,7 @@ def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName
     max_start_year = wanted_station["StartTime"].values[0]
     min_end_year = wanted_station["EndTime"].values[0]
 
-    wanted_station.at[wanted_station.index[0], "distance"] = (0.0, (0.0, 0.0))
+    #wanted_station.at[wanted_station.index[0], "distance"] = (0.0, (0.0, 0.0))
     wanted_station_modified = modify_nearest_stations({"station": wanted_station["station"]})
     wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
     nearest_stations, target_point = spatially_diverse_knn(stationsName_lat_long_datadf, wanted_station["station"].values[0], k)
@@ -481,7 +481,7 @@ def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName
     # Also used to adjust wind speed to be relative to wanted stations direction 
 
     # Get Auxillary Stations DataFrames
-    nearest_stations_data_dfs, aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
+    aux_stations_dfs = getAllKAuxillaryStationsReadyByWantedStationName(stationsName_lat_long_datadf=stationsName_lat_long_datadf, nearest_stations=nearest_stations, k=k, min_start_year=max_start_year, max_end_year=min_end_year, RelativeAnglesDegrees=RelativeAnglesDegrees, csv_files=csv_files, usecols=usecols, dtype=dtype)
     
     # Get Wanted Station DataFrame
     wanted_station_data_dfs = get_nearest_stations_data(wanted_station_csv, max_start_year, min_end_year, wantedStationCSV=True, usecols=usecols, dtype=dtype)
@@ -490,7 +490,7 @@ def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName
     wanted_station_data_dfs, aux_stations_dfs, meanGHI, stdGHI = normalize_dataframes(wanted_station_data_dfs[0], aux_stations_dfs)
 
     # Get Auxillary Stations Chunked Tensors
-    aux_chunked_tensors, aux_chunked_station_order = get_chunked_tensors(nearest_stations, nearest_stations_data_dfs, 25)
+    aux_chunked_tensors, aux_chunked_station_order = get_chunked_tensors(nearest_stations, aux_stations_dfs, 25)
 
     # Get Wanted Station Chunked Tensors
     wanted_chunked_tensors, _ = get_chunked_tensors(wanted_station, wanted_station_data_dfs, 25)
@@ -498,7 +498,7 @@ def getAllReadyForStationByLatAndLongAndK_GivenName(wanted_station, stationsName
     return wanted_chunked_tensors, wanted_station["station"].values[0], aux_chunked_tensors, aux_chunked_station_order, meanGHI, stdGHI, station_data#, aux_stations_dfs, wanted_station_data_dfs
   
   except Exception as e:
-    print("Error in getAllReadyForStationByLatAndLongAndK: ", e)
+    print("Error in getAllReadyForStationByLatAndLongAndK_GivenName: ", e)
     return None, None, None, None, None, None, None#, None, None
 
 
@@ -508,7 +508,7 @@ def getAllReadyForStationByLatAndLongAndKSplitTestAndTrain(stationsName_lat_long
   max_start_year = wanted_station["StartTime"].values[0]
   min_end_year = wanted_station["EndTime"].values[0]
 
-  wanted_station.at[wanted_station.index[0], "distance"] = (0.0, (0.0, 0.0))
+  #wanted_station.at[wanted_station.index[0], "distance"] = (0.0, (0.0, 0.0))
   wanted_station_modified = modify_nearest_stations({"station": wanted_station["station"]})
   wanted_station_csv, _ = find_stations_csv(wanted_station_modified, csv_files)
 
